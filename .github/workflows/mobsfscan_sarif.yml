@@ -1,4 +1,5 @@
 name: mobsfscan sarif
+
 on:
   push:
     branches: [ master, main ]
@@ -6,20 +7,36 @@ on:
     branches: [ master, main ]
 
 jobs:
-  mobsfscan:
+  security_testing_mobsf:
     runs-on: ubuntu-latest
     name: mobsfscan code scanning
+
     steps:
-    - name: Checkout the code
-      uses: actions/checkout@v4.2.2
-    - uses: actions/setup-python@v5.3.0
-      with:
-        python-version: '3.12'
-    - name: mobsfscan
-      uses: MobSF/mobsfscan@main
-      with:
-        args: '. --sarif --output results.sarif || true'
-    - name: Upload mobsfscan report
-      uses: github/codeql-action/upload-sarif@v2
-      with:
-        sarif_file: results.sarif
+      - name: Checkout the code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Run MobSFScan (allow failure)
+        id: mobsfscan
+        continue-on-error: true
+        uses: MobSF/mobsfscan@main
+        with:
+          args: '. --sarif --output results.sarif'
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
+
+      - name: Upload MobSFScan report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobsfscan-sarif-report
+          path: results.sarif
+
