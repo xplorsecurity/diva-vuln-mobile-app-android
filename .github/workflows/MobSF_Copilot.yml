@@ -1,0 +1,84 @@
+name: Mobile AppSec – Hybrid (MobSF + CodeQL Autofix)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  codeql:
+    name: CodeQL Scan (Autofix-enabled)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java, javascript
+          enable-autofix: true
+          queries: ./codeql/custom-queries
+          # Only MobSF-overlapping issues are covered here:
+          # - Hardcoded secrets
+          # - Weak crypto
+          # - Insecure randomness
+          # - WebView misuse
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  mobsf:
+    name: MobSF Mobile SAST (Full Coverage)
+    runs-on: ubuntu-latest
+    needs: codeql
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Zip source code
+        run: |
+          zip -r app.zip .
+
+      - name: Start MobSF
+        run: |
+          docker run -d -p 8000:8000 \
+            opensecurity/mobile-security-framework-mobsf
+
+      - name: Wait for MobSF to be ready
+        run: sleep 30
+
+      - name: Upload App to MobSF
+        run: |
+          curl -X POST http://localhost:8000/api/v1/upload \
+            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
+            -F "file=@app.zip" \
+            -o upload.json
+
+      - name: Extract Scan Hash
+        run: |
+          echo "SCAN_HASH=$(jq -r .hash upload.json)" >> $GITHUB_ENV
+
+      - name: Run Static Analysis
+        run: |
+          curl -X POST http://localhost:8000/api/v1/scan \
+            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
+            -d "scan_type=zip" \
+            -d "hash=$SCAN_HASH"
+
+      - name: Download MobSF JSON Report
+        run: |
+          curl -X POST http://localhost:8000/api/v1/report_json \
+            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
+            -d "scan_hash=$SCAN_HASH" \
+            -o mobsf-report.json
