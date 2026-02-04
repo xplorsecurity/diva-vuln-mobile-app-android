@@ -32,6 +32,36 @@ jobs:
         run: |
           pip install requests openai
 
+      - name: Run MobSF Static Scan
+        run: |
+          docker run -d -p 8000:8000 opensecurity/mobile-security-framework-mobsf
+
+          sleep 30
+
+          zip -r app.zip .
+
+          curl -X POST http://localhost:8000/api/v1/upload \
+            -H "Authorization: YOUR_MOBSF_API_KEY" \
+            -F "file=@app.zip" > upload.json
+
+          HASH=$(jq -r '.hash' upload.json)
+
+          curl -X POST http://localhost:8000/api/v1/scan \
+            -H "Authorization: YOUR_MOBSF_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"hash\":\"$HASH\"}"
+
+          curl -X POST http://localhost:8000/api/v1/report_json \
+            -H "Authorization: YOUR_MOBSF_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"hash\":\"$HASH\"}" > mobsf.json
+
+          curl -X POST http://localhost:8000/api/v1/report_sarif \
+            -H "Authorization: YOUR_MOBSF_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"hash\":\"$HASH\"}" > mobsf.sarif
+
+
       - name: Run MobSF LLM Remediation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
