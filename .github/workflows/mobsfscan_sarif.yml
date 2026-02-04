@@ -1,40 +1,25 @@
-name: MobSF LLM Autofix
+name: mobsfscan sarif
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - "**/*.java"
-      - "**/*.kt"
-
-permissions:
-  contents: write
-  security-events: write
-  pull-requests: write
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
 
 jobs:
-  mobsf-autofix:
+  security_testing_mobsf:
     runs-on: ubuntu-latest
+    name: mobsfscan code scanning
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout the code
+        uses: actions/checkout@v4.2.2
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5.3.0
         with:
-          python-version: "3.10"
+          python-version: '3.12'
 
-      - name: Install dependencies
-        run: |
-          pip install requests openai
-
-      # -----------------------------
-      # MobSF Scan (SARIF generation)
-      # -----------------------------
       - name: Run MobSFScan (allow failure)
         id: mobsfscan
         continue-on-error: true
@@ -54,14 +39,3 @@ jobs:
         with:
           name: mobsfscan-sarif-report
           path: results.sarif
-
-      # -----------------------------
-      # LLM Autofix Stage
-      # -----------------------------
-      - name: Run MobSF LLM Remediation
-        if: always()
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          cp results.sarif mobsf.sarif
-          python security/mobsf_sarif_autofix.py
