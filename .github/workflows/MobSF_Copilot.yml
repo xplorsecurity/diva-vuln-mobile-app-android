@@ -3,6 +3,9 @@ name: MobSF LLM Autofix
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - master
     paths:
       - "**/*.java"
       - "**/*.kt"
