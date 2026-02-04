@@ -1,91 +1,37 @@
-name: Mobile AppSec – MobSF + CodeQL Autofix
+name: MobSF LLM Autofix
 
 on:
-  pull_request:
-    branches: [ "master" ]
+  workflow_dispatch:
   push:
-    branches: [ "master" ]
+    paths:
+      - "**/*.java"
+      - "**/*.kt"
 
 permissions:
-  contents: read
-  security-events: write
+  contents: write
+  security-events: read
   pull-requests: write
 
 jobs:
-  # -----------------------------
-  # CodeQL – Autofix-capable scan
-  # -----------------------------
-  codeql:
-    name: CodeQL Scan (Custom Queries)
+  mobsf-autofix:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          distribution: temurin
-          java-version: 8
-    
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: java
-          queries: ./Codeql/QueriesMobSF
+          python-version: "3.10"
 
-      - name: Compile Java sources only
-        run: ./gradlew :app:compileJava --no-daemon
-        
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-
-  # -----------------------------
-  # MobSF – Discovery scan only
-  # -----------------------------
-  mobsf:
-    name: MobSF Mobile SAST (Discovery)
-    runs-on: ubuntu-latest
-    needs: codeql
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Zip source code
+      - name: Install dependencies
         run: |
-          zip -r app.zip .
+          pip install requests openai
 
-      - name: Start MobSF
+      - name: Run MobSF LLM Remediation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          docker run -d -p 8000:8000 \
-            opensecurity/mobile-security-framework-mobsf
-
-      - name: Wait for MobSF
-        run: sleep 30
-
-      - name: Upload App to MobSF
-        run: |
-          curl -X POST http://localhost:8000/api/v1/upload \
-            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
-            -F "file=@app.zip" \
-            -o upload.json
-
-      - name: Extract Scan Hash
-        run: |
-          echo "SCAN_HASH=$(jq -r .hash upload.json)" >> $GITHUB_ENV
-
-      - name: Run Static Analysis
-        run: |
-          curl -X POST http://localhost:8000/api/v1/scan \
-            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
-            -d "scan_type=zip" \
-            -d "hash=$SCAN_HASH"
-
-      - name: Download MobSF Report
-        run: |
-          curl -X POST http://localhost:8000/api/v1/report_json \
-            -H "Authorization: ${{ secrets.MOBSF_API_KEY }}" \
-            -d "scan_hash=$SCAN_HASH" \
-            -o mobsf-report.json
+          python security/mobsf_sarif_autofix.py
