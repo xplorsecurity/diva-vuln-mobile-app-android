@@ -16,12 +16,24 @@ jobs:
   # CodeQL – Autofix-capable scan
   # -----------------------------
   codeql:
-    name: CodeQL Scan (Custom Queries + Autofix)
+    name: CodeQL Scan (Custom Queries)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -29,12 +41,8 @@ jobs:
           languages: java
           queries: ./Codeql/QueriesMobSF
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      # Use manual build if autobuild fails
-      # - name: Manual build
-      #   run: ./gradlew build
+      - name: Build Android project
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
