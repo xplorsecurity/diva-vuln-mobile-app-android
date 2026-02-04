@@ -27,7 +27,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: java
-          queries: ./codeql/custom-queries
+          queries: ./Codeql/QueriesMobSF
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
