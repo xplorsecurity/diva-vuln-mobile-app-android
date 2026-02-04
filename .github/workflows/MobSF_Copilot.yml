@@ -28,30 +28,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 8
-
-      
-      - name: Install Android SDK Platform 23
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-          SKIP_JDK_VERSION_CHECK: true
-        run: |
-          mkdir -p $ANDROID_HOME
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-23" \
-            "build-tools;23.0.3"
-            
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
+    
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: java
           queries: ./Codeql/QueriesMobSF
-
-      - name: Build Android project
-        run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
