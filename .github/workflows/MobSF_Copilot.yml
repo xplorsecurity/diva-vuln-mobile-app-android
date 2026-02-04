@@ -35,6 +35,9 @@ jobs:
           languages: java
           queries: ./Codeql/QueriesMobSF
 
+      - name: Compile Java sources only
+        run: ./gradlew :app:compileJava --no-daemon
+        
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
