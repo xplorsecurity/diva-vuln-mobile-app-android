@@ -28,7 +28,6 @@ jobs:
         with:
           languages: java
           queries: ./codeql/custom-queries
-          enable-autofix: true
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
