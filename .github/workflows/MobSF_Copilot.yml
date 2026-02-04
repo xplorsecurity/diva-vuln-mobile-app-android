@@ -12,7 +12,7 @@ on:
 
 permissions:
   contents: write
-  security-events: read
+  security-events: write
   pull-requests: write
 
 jobs:
@@ -32,39 +32,36 @@ jobs:
         run: |
           pip install requests openai
 
-      - name: Run MobSF Static Scan
-        run: |
-          docker run -d -p 8000:8000 opensecurity/mobile-security-framework-mobsf
+      # -----------------------------
+      # MobSF Scan (SARIF generation)
+      # -----------------------------
+      - name: Run MobSFScan (allow failure)
+        id: mobsfscan
+        continue-on-error: true
+        uses: MobSF/mobsfscan@main
+        with:
+          args: '. --sarif --output results.sarif'
 
-          sleep 30
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
 
-          zip -r app.zip .
+      - name: Upload MobSFScan report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobsfscan-sarif-report
+          path: results.sarif
 
-          curl -X POST http://localhost:8000/api/v1/upload \
-            -H "Authorization: YOUR_MOBSF_API_KEY" \
-            -F "file=@app.zip" > upload.json
-
-          HASH=$(jq -r '.hash' upload.json)
-
-          curl -X POST http://localhost:8000/api/v1/scan \
-            -H "Authorization: YOUR_MOBSF_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"hash\":\"$HASH\"}"
-
-          curl -X POST http://localhost:8000/api/v1/report_json \
-            -H "Authorization: YOUR_MOBSF_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"hash\":\"$HASH\"}" > mobsf.json
-
-          curl -X POST http://localhost:8000/api/v1/report_sarif \
-            -H "Authorization: YOUR_MOBSF_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"hash\":\"$HASH\"}" > mobsf.sarif
-
-
+      # -----------------------------
+      # LLM Autofix Stage
+      # -----------------------------
       - name: Run MobSF LLM Remediation
+        if: always()
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          cp results.sarif mobsf.sarif
           python security/mobsf_sarif_autofix.py
