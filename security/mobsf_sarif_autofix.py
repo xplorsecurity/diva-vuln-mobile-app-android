@@ -4,6 +4,12 @@ import subprocess
 from openai import OpenAI
 
 SARIF_FILE = "mobsf.sarif"
+# -----------------------------
+# STEP 4: Safety check
+# -----------------------------
+if not os.path.exists(SARIF_FILE):
+    print("[!] mobsf.sarif not found – skipping LLM autofix")
+    sys.exit(0)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
