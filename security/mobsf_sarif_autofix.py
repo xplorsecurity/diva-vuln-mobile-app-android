@@ -11,7 +11,7 @@ if not os.path.exists(SARIF_FILE):
     print("[!] mobsf.sarif not found – skipping LLM autofix")
     sys.exit(0)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.getenv("FINDINGS_COPILOT"))
 
 def load_sarif():
     with open(SARIF_FILE, "r", encoding="utf-8") as f:
