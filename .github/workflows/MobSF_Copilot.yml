@@ -42,6 +42,15 @@ jobs:
         with:
           args: '. --sarif --output results.sarif'
 
+      - name: Debug – list files after MobSF scan
+        if: always()
+        run: |
+          echo "PWD:"
+          pwd
+          echo "Listing files:"
+          ls -lah
+
+
       - name: Upload SARIF to GitHub Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v2
@@ -54,8 +63,23 @@ jobs:
         with:
           name: mobsfscan-sarif-report
           path: results.sarif
-
       # -----------------------------
+      # STEP 2: Prepare SARIF for autofix
+      # -----------------------------
+      - name: Prepare SARIF for autofix
+        if: always()
+        run: |
+          echo "Searching for SARIF file..."
+          SARIF_FILE=$(find . -name "*.sarif" | head -n 1)
+
+          if [ -z "$SARIF_FILE" ]; then
+            echo "No SARIF file found. Skipping autofix."
+            exit 0
+          fi
+
+          echo "Using SARIF file: $SARIF_FILE"
+          cp "$SARIF_FILE" mobsf.sarif  
+    # -----------------------------
       # LLM Autofix Stage
       # -----------------------------
       - name: Run MobSF LLM Remediation
