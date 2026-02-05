@@ -31,6 +31,44 @@ def normalize_path(file_path):
         return None
 
     return file_path
+def fix_android_manifest(issue):
+    manifest_path = "app/src/main/AndroidManifest.xml"
+
+    if not os.path.exists(manifest_path):
+        print("[!] AndroidManifest.xml not found, skipping")
+        return
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    original = content
+
+    # Example fixes (safe defaults)
+    if "android:allowBackup=\"true\"" in content:
+        content = content.replace(
+            "android:allowBackup=\"true\"",
+            "android:allowBackup=\"false\""
+        )
+
+    if "android:debuggable=\"true\"" in content:
+        content = content.replace(
+            "android:debuggable=\"true\"",
+            "android:debuggable=\"false\""
+        )
+
+    if content != original:
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print("[+] AndroidManifest.xml hardened")
+    else:
+        print("[!] No safe manifest fix identified")
+
+def map_directory_finding(issue):
+    if "logging" in issue.lower():
+        return "app/src/main/java/jakhar/aseem/diva/LogActivity.java"
+    if "sql" in issue.lower():
+        return "app/src/main/java/jakhar/aseem/diva/SQLInjectionActivity.java"
+    return None
 
 def get_source_snippet(file_path, start_line, end_line):
     file_path = normalize_path(file_path)
@@ -51,6 +89,9 @@ def get_source_snippet(file_path, start_line, end_line):
         lines = f.readlines()
 
     return "".join(lines[start_line - 1 : end_line])
+
+def fix_insecure_logging(code):
+    return code.replace("Log.d(", "// Log.d(")
 
 def ask_llm_to_fix(issue, code):
     prompt = f"""
@@ -127,6 +168,25 @@ def main():
 
             print(f"[+] Fixing {file_path}:{start}-{end}")
 
+            # Detect AndroidManifest findings
+            if file_path and "AndroidManifest.xml" in file_path:
+                print("[+] Handling AndroidManifest.xml finding")
+                fix_android_manifest(message)
+                continue
+            if file_path in [".", "./"]:
+                mapped = map_directory_finding(message)
+            if mapped:
+                print(f"[+] Mapping directory finding to {mapped}")
+                file_path = mapped
+            else:
+                print("[!] No safe mapping for directory finding")
+                continue
+
+            if "logging" in message.lower():
+                fixed = fix_insecure_logging(code)
+            else:
+                fixed = ask_llm_to_fix(message, code)
+                
             code = get_source_snippet(file_path, start, end)
             if not code:
                 print("[!] No source code available, skipping this finding")
