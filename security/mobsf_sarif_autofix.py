@@ -18,17 +18,32 @@ def load_sarif():
         return json.load(f)
 
 def normalize_path(file_path):
-    # Remove file:// prefix if present
+    if not file_path:
+        return None
+
+    # Handle file:// URIs
     if file_path.startswith("file://"):
         file_path = file_path.replace("file://", "")
+
+    # Skip current directory or empty paths
+    if file_path in [".", "./"]:
+        return None
 
     return file_path
 
 def get_source_snippet(file_path, start_line, end_line):
     file_path = normalize_path(file_path)
 
+    if not file_path:
+        print("[!] Invalid or empty file path, skipping")
+        return None
+
     if not os.path.exists(file_path):
         print(f"[!] File not found on disk, skipping: {file_path}")
+        return None
+
+    if os.path.isdir(file_path):
+        print(f"[!] Path is a directory, skipping: {file_path}")
         return None
 
     with open(file_path, "r", encoding="utf-8") as f:
