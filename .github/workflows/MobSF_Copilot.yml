@@ -85,7 +85,7 @@ jobs:
       - name: Run MobSF LLM Remediation
         if: always()
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.FINDINGS_COPILOT }}
         run: |
           cp results.sarif mobsf.sarif
           python security/mobsf_sarif_autofix.py
