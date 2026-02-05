@@ -17,11 +17,25 @@ def load_sarif():
     with open(SARIF_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+def normalize_path(file_path):
+    # Remove file:// prefix if present
+    if file_path.startswith("file://"):
+        file_path = file_path.replace("file://", "")
+
+    return file_path
+
 def get_source_snippet(file_path, start_line, end_line):
+    file_path = normalize_path(file_path)
+
+    if not os.path.exists(file_path):
+        print(f"[!] File not found on disk, skipping: {file_path}")
+        return None
+
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
-        return "".join(lines[start_line-1:end_line])
-        
+
+    return "".join(lines[start_line - 1 : end_line])
+  
 def ask_llm_to_fix(issue, code):
     prompt = f"""
 You are a secure Android developer.
@@ -83,6 +97,10 @@ def main():
             print(f"[+] Fixing {file_path}:{start}-{end}")
 
             code = get_source_snippet(file_path, start, end)
+            if not code:
+                print("[!] No source code available, skipping this finding")
+                continue
+            
             fixed = ask_llm_to_fix(message, code)
             if not fixed:
                 print("[!] No fix generated, continuing to next finding")
