@@ -78,7 +78,12 @@ jobs:
           fi
 
           echo "Using SARIF file: $SARIF_FILE"
-          cp "$SARIF_FILE" mobsf.sarif  
+
+          if [ "$SARIF_FILE" != "mobsf.sarif" ]; then
+            cp "$SARIF_FILE" mobsf.sarif
+          else
+            echo "SARIF already named mobsf.sarif, skipping copy"
+          fi
     # -----------------------------
       # LLM Autofix Stage
       # -----------------------------
