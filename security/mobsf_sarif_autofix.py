@@ -1,7 +1,7 @@
 import json
 import os
 import subprocess
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, AuthenticationError
 
 SARIF_FILE = "mobsf.sarif"
 # -----------------------------
@@ -21,7 +21,7 @@ def get_source_snippet(file_path, start_line, end_line):
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         return "".join(lines[start_line-1:end_line])
-
+        
 def ask_llm_to_fix(issue, code):
     prompt = f"""
 You are a secure Android developer.
@@ -30,16 +30,26 @@ Vulnerability:
 {issue}
 
 Fix the following code securely.
-Return ONLY the fixed code, no explanation.
+Return ONLY the fixed code.
 
 Code:
 {code}
 """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        return response.choices[0].message.content
+
+    except RateLimitError:
+        print("[!] OpenAI quota exceeded – skipping this finding")
+        return None
+
+    except AuthenticationError:
+        print("[!] OpenAI authentication failed – skipping this finding")
+        return None
 
 def apply_fix(file_path, start_line, end_line, fixed_code):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -74,8 +84,10 @@ def main():
 
             code = get_source_snippet(file_path, start, end)
             fixed = ask_llm_to_fix(message, code)
+            if not fixed:
+                print("[!] No fix generated, continuing to next finding")
+                continue
             apply_fix(file_path, start, end, fixed)
-
     git_commit()
 
 if __name__ == "__main__":
