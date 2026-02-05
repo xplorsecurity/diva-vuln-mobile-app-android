@@ -89,3 +89,11 @@ jobs:
         run: |
           cp results.sarif mobsf.sarif
           python security/mobsf_sarif_autofix.py
+
+      - name: Upload fix suggestions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobsf-fix-suggestions
+          path: mobsf_fix_suggestions.md
+
