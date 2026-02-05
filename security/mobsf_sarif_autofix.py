@@ -4,6 +4,7 @@ import subprocess
 from openai import OpenAI, RateLimitError, AuthenticationError
 
 SARIF_FILE = "mobsf.sarif"
+SUGGESTIONS_FILE = "mobsf_fix_suggestions.md"
 # -----------------------------
 # STEP 4: Safety check
 # -----------------------------
@@ -50,7 +51,7 @@ def get_source_snippet(file_path, start_line, end_line):
         lines = f.readlines()
 
     return "".join(lines[start_line - 1 : end_line])
-  
+
 def ask_llm_to_fix(issue, code):
     prompt = f"""
 You are a secure Android developer.
@@ -79,6 +80,21 @@ Code:
     except AuthenticationError:
         print("[!] OpenAI authentication failed – skipping this finding")
         return None
+        
+def write_suggestion(file_path, start, end, issue, original, suggestion):
+    with open(SUGGESTIONS_FILE, "a", encoding="utf-8") as f:
+        f.write(f"\n## 📄 {file_path}:{start}-{end}\n")
+        f.write(f"**Issue:** {issue}\n\n")
+
+        f.write("### 🔴 Vulnerable Code\n")
+        f.write("```java\n")
+        f.write(original.strip() + "\n")
+        f.write("```\n\n")
+
+        f.write("### ✅ Suggested Fix\n")
+        f.write("```java\n")
+        f.write(suggestion.strip() + "\n")
+        f.write("```\n\n")
 
 def apply_fix(file_path, start_line, end_line, fixed_code):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -118,9 +134,10 @@ def main():
             
             fixed = ask_llm_to_fix(message, code)
             if not fixed:
-                print("[!] No fix generated, continuing to next finding")
-                continue
-            apply_fix(file_path, start, end, fixed)
+                print("[!] No suggestion generated, continuing")
+            write_suggestion(file_path, start, end, message, code, fixed)
+            print("[+] Fix suggestion recorded")
+            
     git_commit()
 
 if __name__ == "__main__":
