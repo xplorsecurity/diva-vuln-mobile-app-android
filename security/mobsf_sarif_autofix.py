@@ -173,14 +173,14 @@ def main():
                 print("[+] Handling AndroidManifest.xml finding")
                 fix_android_manifest(message)
                 continue
+                
+            mapped = None  # ✅ ALWAYS initialize
             if file_path in [".", "./"]:
-                mapped = map_directory_finding(message)
+               mapped = map_directory_finding(message)
+
             if mapped:
                 print(f"[+] Mapping directory finding to {mapped}")
                 file_path = mapped
-            else:
-                print("[!] No safe mapping for directory finding")
-                continue
 
             if "logging" in message.lower():
                 fixed = fix_insecure_logging(code)
