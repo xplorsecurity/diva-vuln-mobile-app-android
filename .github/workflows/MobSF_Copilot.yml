@@ -84,13 +84,12 @@ jobs:
           else
             echo "SARIF already named mobsf.sarif, skipping copy"
           fi
-    # -----------------------------
-      # LLM Autofix Stage
+    
       - name: Run MobSF LLM Remediation
         if: always()
         env:
           OPENAI_API_KEY: ${{ secrets.FINDINGS_COPILOT }}
-         run: |
+        run: |
           python security/mobsf_sarif_autofix.py
 
       - name: Upload fix suggestions
