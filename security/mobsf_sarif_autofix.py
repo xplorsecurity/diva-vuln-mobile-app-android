@@ -78,13 +78,103 @@ Code:
 
 
 def generic_recommendation(issue):
-    return f"""
-This finding does not map to a specific source line.
+    issue_lc = issue.lower()
 
-Recommended actions:
-- Review application-wide configuration and architecture.
-- Follow Android secure coding best practices.
-- Apply MobSF remediation guidance for the issue: {issue}
+    # ---------- Logging ----------
+    if "log" in issue_lc:
+        return """
+Disable or restrict logging of sensitive data.
+
+Specific actions:
+- Remove Log.d(), Log.i(), Log.v() statements from production code.
+- Ensure no credentials, tokens, PII, or session data are logged.
+- Use BuildConfig.DEBUG to guard debug logs.
+
+Example:
+if (BuildConfig.DEBUG) {
+    Log.d("TAG", "Debug-only log");
+}
+"""
+
+    # ---------- SQL Injection ----------
+    if "sql" in issue_lc:
+        return """
+Prevent SQL Injection vulnerabilities.
+
+Specific actions:
+- Do NOT build SQL queries using string concatenation.
+- Use parameterized queries or prepared statements.
+- Prefer Room ORM or SQLiteDatabase.query() APIs.
+
+Example:
+db.rawQuery(
+    "SELECT * FROM users WHERE id = ?",
+    new String[]{userId}
+);
+"""
+
+    # ---------- Insecure Data Storage ----------
+    if "storage" in issue_lc or "sharedpreferences" in issue_lc:
+        return """
+Secure sensitive data storage.
+
+Specific actions:
+- Do NOT store sensitive data in plaintext SharedPreferences.
+- Use EncryptedSharedPreferences or Android Keystore.
+- Avoid storing credentials on the device when possible.
+
+Example:
+EncryptedSharedPreferences.create(
+    "secure_prefs",
+    masterKey,
+    context,
+    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+);
+"""
+
+    # ---------- AndroidManifest Misconfig ----------
+    if "manifest" in issue_lc or "exported" in issue_lc or "backup" in issue_lc:
+        return """
+Harden AndroidManifest.xml configuration.
+
+Specific actions:
+- Set android:exported="false" for components not meant to be public.
+- Set android:allowBackup="false" if backup is not required.
+- Set android:debuggable="false" for release builds.
+
+Example:
+<application
+    android:allowBackup="false"
+    android:debuggable="false">
+</application>
+"""
+
+    # ---------- WebView ----------
+    if "webview" in issue_lc:
+        return """
+Secure WebView usage.
+
+Specific actions:
+- Disable JavaScript if not required.
+- Avoid addJavascriptInterface unless absolutely necessary.
+- Enable Safe Browsing where supported.
+
+Example:
+webView.getSettings().setJavaScriptEnabled(false);
+"""
+
+    # ---------- Fallback (still specific) ----------
+    return f"""
+Manual review required for this finding.
+
+Specific actions:
+- Identify the components related to this issue.
+- Apply least-privilege and secure-by-default principles.
+- Review MobSF documentation for this rule.
+
+Issue reference:
+{issue}
 """
 
 
