@@ -73,16 +73,18 @@ jobs:
           SARIF_FILE=$(find . -name "*.sarif" | head -n 1)
 
           if [ -z "$SARIF_FILE" ]; then
-            echo "No SARIF file found. Skipping autofix."
-            exit 0
+          echo "No SARIF file found. Skipping autofix."
+          exit 0
           fi
-
+          SARIF_FILE=$(realpath "$SARIF_FILE")
           echo "Using SARIF file: $SARIF_FILE"
 
-          if [ "$SARIF_FILE" != "mobsf.sarif" ]; then
-            cp "$SARIF_FILE" mobsf.sarif
+          TARGET_FILE=$(realpath mobsf.sarif 2>/dev/null || echo "")
+
+          if [ "$SARIF_FILE" != "$TARGET_FILE" ]; then
+          cp "$SARIF_FILE" mobsf.sarif
           else
-            echo "SARIF already named mobsf.sarif, skipping copy"
+          echo "SARIF already normalized as mobsf.sarif, skipping copy"
           fi
     
       - name: Run MobSF LLM Remediation
