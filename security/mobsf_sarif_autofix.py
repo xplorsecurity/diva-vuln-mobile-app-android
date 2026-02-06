@@ -1,88 +1,49 @@
 import json
 import os
-import subprocess
+import sys
 from openai import OpenAI, RateLimitError, AuthenticationError
 
+# -----------------------------
+# Constants
+# -----------------------------
 SARIF_FILE = "mobsf.sarif"
 SUGGESTIONS_FILE = "mobsf_fix_suggestions.md"
+
+client = OpenAI()
+
 # -----------------------------
-# STEP 4: Safety check
+# Safety check
 # -----------------------------
 if not os.path.exists(SARIF_FILE):
-    print("[!] mobsf.sarif not found – skipping LLM autofix")
+    print("[!] mobsf.sarif not found – exiting safely")
     sys.exit(0)
 
-client = OpenAI(api_key=os.getenv("FINDINGS_COPILOT"))
-
-def load_sarif():
-    with open(SARIF_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+# -----------------------------
+# Helpers
+# -----------------------------
 def normalize_path(file_path):
     if not file_path:
         return None
 
-    # Handle file:// URIs
     if file_path.startswith("file://"):
         file_path = file_path.replace("file://", "")
 
-    # Skip current directory or empty paths
     if file_path in [".", "./"]:
         return None
 
     return file_path
-def fix_android_manifest(issue):
-    manifest_path = "app/src/main/AndroidManifest.xml"
 
-    if not os.path.exists(manifest_path):
-        print("[!] AndroidManifest.xml not found, skipping")
-        return
-
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    original = content
-
-    # Example fixes (safe defaults)
-    if "android:allowBackup=\"true\"" in content:
-        content = content.replace(
-            "android:allowBackup=\"true\"",
-            "android:allowBackup=\"false\""
-        )
-
-    if "android:debuggable=\"true\"" in content:
-        content = content.replace(
-            "android:debuggable=\"true\"",
-            "android:debuggable=\"false\""
-        )
-
-    if content != original:
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print("[+] AndroidManifest.xml hardened")
-    else:
-        print("[!] No safe manifest fix identified")
-
-def map_directory_finding(issue):
-    if "logging" in issue.lower():
-        return "app/src/main/java/jakhar/aseem/diva/LogActivity.java"
-    if "sql" in issue.lower():
-        return "app/src/main/java/jakhar/aseem/diva/SQLInjectionActivity.java"
-    return None
 
 def get_source_snippet(file_path, start_line, end_line):
     file_path = normalize_path(file_path)
 
     if not file_path:
-        print("[!] Invalid or empty file path, skipping")
         return None
 
     if not os.path.exists(file_path):
-        print(f"[!] File not found on disk, skipping: {file_path}")
         return None
 
     if os.path.isdir(file_path):
-        print(f"[!] Path is a directory, skipping: {file_path}")
         return None
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -90,18 +51,16 @@ def get_source_snippet(file_path, start_line, end_line):
 
     return "".join(lines[start_line - 1 : end_line])
 
-def fix_insecure_logging(code):
-    return code.replace("Log.d(", "// Log.d(")
 
 def ask_llm_to_fix(issue, code):
     prompt = f"""
-You are a secure Android developer.
+You are an Android security expert.
 
 Vulnerability:
 {issue}
 
-Fix the following code securely.
-Return ONLY the fixed code.
+Provide a secure remediation suggestion.
+Return ONLY the corrected code snippet.
 
 Code:
 {code}
@@ -114,91 +73,84 @@ Code:
         )
         return response.choices[0].message.content
 
-    except RateLimitError:
-        print("[!] OpenAI quota exceeded – skipping this finding")
+    except (RateLimitError, AuthenticationError):
         return None
 
-    except AuthenticationError:
-        print("[!] OpenAI authentication failed – skipping this finding")
-        return None
-        
-def write_suggestion(file_path, start, end, issue, original, suggestion):
+
+def generic_recommendation(issue):
+    return f"""
+This finding does not map to a specific source line.
+
+Recommended actions:
+- Review application-wide configuration and architecture.
+- Follow Android secure coding best practices.
+- Apply MobSF remediation guidance for the issue: {issue}
+"""
+
+
+def generate_recommendation(issue, file_path, start, end):
+    code = get_source_snippet(file_path, start, end)
+
+    if code:
+        suggestion = ask_llm_to_fix(issue, code)
+        if suggestion:
+            return code, suggestion
+
+    return "N/A (no direct source context)", generic_recommendation(issue)
+
+
+def write_suggestion(file_path, start, end, issue, original, recommendation):
     with open(SUGGESTIONS_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\n## 📄 {file_path}:{start}-{end}\n")
+        f.write(f"\n## 📄 {file_path or 'N/A'}:{start}-{end}\n")
         f.write(f"**Issue:** {issue}\n\n")
 
-        f.write("### 🔴 Vulnerable Code\n")
-        f.write("```java\n")
+        f.write("### 🔴 Affected Context\n")
+        f.write("```text\n")
         f.write(original.strip() + "\n")
         f.write("```\n\n")
 
-        f.write("### ✅ Suggested Fix\n")
-        f.write("```java\n")
-        f.write(suggestion.strip() + "\n")
+        f.write("### ✅ Recommendation\n")
+        f.write("```text\n")
+        f.write(recommendation.strip() + "\n")
         f.write("```\n\n")
 
-def apply_fix(file_path, start_line, end_line, fixed_code):
-    with open(file_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
 
-    lines[start_line-1:end_line] = fixed_code.splitlines(keepends=True)
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
-
-def git_commit():
-    subprocess.run(["git", "config", "user.name", "mobsf-llm-bot"])
-    subprocess.run(["git", "config", "user.email", "mobsf@autofix.bot"])
-    subprocess.run(["git", "add", "."])
-    subprocess.run(["git", "commit", "-m", "fix: MobSF security issue (LLM autofix)"], check=False)
-    subprocess.run(["git", "push"], check=False)
-
+# -----------------------------
+# Main
+# -----------------------------
 def main():
-    sarif = load_sarif()
+    with open(SARIF_FILE, "r", encoding="utf-8") as f:
+        sarif = json.load(f)
 
     for run in sarif.get("runs", []):
         for result in run.get("results", []):
-            message = result["message"]["text"]
-            location = result["locations"][0]["physicalLocation"]
-            file_path = location["artifactLocation"]["uri"]
-            region = location["region"]
+            issue = result["message"]["text"]
 
+            location = result.get("locations", [{}])[0].get("physicalLocation", {})
+            artifact = location.get("artifactLocation", {})
+            region = location.get("region", {})
+
+            file_path = artifact.get("uri")
             start = region.get("startLine", 1)
-            end = region.get("endLine", start + 5)
+            end = region.get("endLine", start)
 
-            print(f"[+] Fixing {file_path}:{start}-{end}")
+            print(f"[+] Processing finding: {issue}")
 
-            # Detect AndroidManifest findings
-            if file_path and "AndroidManifest.xml" in file_path:
-                print("[+] Handling AndroidManifest.xml finding")
-                fix_android_manifest(message)
-                continue
-                
-            mapped = None  # ✅ ALWAYS initialize
-            if file_path in [".", "./"]:
-               mapped = map_directory_finding(message)
+            original, recommendation = generate_recommendation(
+                issue, file_path, start, end
+            )
 
-            if mapped:
-                print(f"[+] Mapping directory finding to {mapped}")
-                file_path = mapped
+            write_suggestion(
+                file_path,
+                start,
+                end,
+                issue,
+                original,
+                recommendation
+            )
 
-            if "logging" in message.lower():
-                fixed = fix_insecure_logging(code)
-            else:
-                fixed = ask_llm_to_fix(message, code)
-                
-            code = get_source_snippet(file_path, start, end)
-            if not code:
-                print("[!] No source code available, skipping this finding")
-                continue
-            
-            fixed = ask_llm_to_fix(message, code)
-            if not fixed:
-                print("[!] No suggestion generated, continuing")
-            write_suggestion(file_path, start, end, message, code, fixed)
-            print("[+] Fix suggestion recorded")
-            
-    git_commit()
+    print("[+] All findings processed. Suggestions generated.")
+
 
 if __name__ == "__main__":
     main()
