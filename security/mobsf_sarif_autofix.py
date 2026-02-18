@@ -1,11 +1,14 @@
 import json
 import os
+import base64
 import requests
 
 # -----------------------------
 # Config
 # -----------------------------
 SARIF_FILE = "mobsf.sarif"
+REPORT_FILE = "security/mobsf_findings_report.md"
+
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO = os.getenv("GITHUB_REPOSITORY")
 
@@ -36,11 +39,7 @@ def branch_exists(branch_name):
     return r.status_code == 200
 
 
-def create_branch_if_not_exists(branch_name, base_branch):
-    if branch_exists(branch_name):
-        print("Branch already exists.")
-        return
-
+def create_branch(branch_name, base_branch):
     ref_data = requests.get(
         f"{API_URL}/git/ref/heads/{base_branch}",
         headers=headers
@@ -63,12 +62,48 @@ def create_branch_if_not_exists(branch_name, base_branch):
     print("Branch created.")
 
 
+def create_or_update_file(branch, content):
+    encoded = base64.b64encode(content.encode()).decode()
+
+    # Check if file exists
+    r = requests.get(
+        f"{API_URL}/contents/{REPORT_FILE}?ref={branch}",
+        headers=headers
+    )
+
+    sha = None
+    if r.status_code == 200:
+        sha = r.json()["sha"]
+
+    data = {
+        "message": "Update MobSF security findings report",
+        "content": encoded,
+        "branch": branch
+    }
+
+    if sha:
+        data["sha"] = sha
+
+    response = requests.put(
+        f"{API_URL}/contents/{REPORT_FILE}",
+        headers=headers,
+        json=data
+    )
+
+    if response.status_code not in [200, 201]:
+        raise Exception(f"Failed to commit file: {response.text}")
+
+    print("Security report committed.")
+
+
 def get_existing_pr(branch_name):
     owner = REPO.split("/")[0]
+
     r = requests.get(
         f"{API_URL}/pulls?head={owner}:{branch_name}&state=open",
         headers=headers
     )
+
     r.raise_for_status()
     prs = r.json()
 
@@ -78,12 +113,7 @@ def get_existing_pr(branch_name):
     return None
 
 
-def create_or_get_pr(branch_name, base_branch):
-    existing_pr = get_existing_pr(branch_name)
-    if existing_pr:
-        print("PR already exists.")
-        return existing_pr
-
+def create_pr(branch_name, base_branch):
     response = requests.post(
         f"{API_URL}/pulls",
         headers=headers,
@@ -91,7 +121,7 @@ def create_or_get_pr(branch_name, base_branch):
             "title": "🔐 MobSF Security Findings",
             "head": branch_name,
             "base": base_branch,
-            "body": "Automated MobSF findings. Copilot will suggest fixes below."
+            "body": "Automated MobSF findings report. Copilot suggestions below."
         }
     )
 
@@ -126,11 +156,18 @@ def main():
     base_branch = get_default_branch()
     branch_name = "mobsf-security-fix"
 
-    create_branch_if_not_exists(branch_name, base_branch)
-    pr_number = create_or_get_pr(branch_name, base_branch)
+    if not branch_exists(branch_name):
+        create_branch(branch_name, base_branch)
+    else:
+        print("Branch already exists.")
+
+    # Build report content
+    report_content = "# MobSF Security Findings\n\n"
 
     with open(SARIF_FILE, "r", encoding="utf-8") as f:
         sarif = json.load(f)
+
+    findings = []
 
     for run in sarif.get("runs", []):
         for result in run.get("results", []):
@@ -143,20 +180,31 @@ def main():
             file_path = artifact.get("uri", "N/A")
             start = region.get("startLine", "N/A")
 
-            comment = f"""
-@github-copilot please suggest a secure remediation.
+            findings.append((issue, file_path, start))
 
-**Issue:**
-{issue}
+            report_content += f"## {issue}\n"
+            report_content += f"- File: {file_path}:{start}\n\n"
 
-**File:**
-{file_path}:{start}
+    if not findings:
+        print("No findings found.")
+        return
 
-Provide a secure Android fix.
-"""
-            comment_on_pr(pr_number, comment)
+    # Commit report file (this creates actual diff)
+    create_or_update_file(branch_name, report_content)
 
-    print("MobSF PR created/updated and Copilot tagged.")
+    # Create or reuse PR
+    pr_number = get_existing_pr(branch_name)
+    if not pr_number:
+        pr_number = create_pr(branch_name, base_branch)
+    else:
+        print("PR already exists.")
+
+    # Tag Copilot once
+    comment_body = "@github-copilot please review this MobSF security report and suggest secure Android remediations for each finding."
+
+    comment_on_pr(pr_number, comment_body)
+
+    print("MobSF PR ready and Copilot tagged.")
 
 
 if __name__ == "__main__":
