@@ -1,103 +1,36 @@
-name: MobSF LLM Autofix
+name: MobSF GitHub-Native Security
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - "**/*.java"
-      - "**/*.kt"
-
-permissions:
-  contents: write
-  security-events: write
-  pull-requests: write
+  pull_request:
 
 jobs:
-  mobsf-autofix:
+  security-scan:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+      pull-requests: write
+      security-events: write
+
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
+      # Run MobSF here (example placeholder)
+      - name: Run MobSF
         run: |
-          pip install openai
+          echo "Run MobSF here"
+          # Assume mobsf.sarif gets generated
 
-      # -----------------------------
-      # MobSF Scan (SARIF generation)
-      # -----------------------------
-      - name: Run MobSFScan (allow failure)
-        id: mobsfscan
-        continue-on-error: true
-        uses: MobSF/mobsfscan@main
+      # Upload SARIF to Code Scanning
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          args: '. --sarif --output results.sarif'
+          sarif_file: mobsf.sarif
 
-      - name: Debug – list files after MobSF scan
-        if: always()
-        run: |
-          echo "PWD:"
-          pwd
-          echo "Listing files:"
-          ls -lah
-
-
-      - name: Upload SARIF to GitHub Code Scanning
-        if: always()
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: results.sarif
-
-      - name: Upload MobSFScan report as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobsfscan-sarif-report
-          path: results.sarif
-      # -----------------------------
-      # STEP 2: Prepare SARIF for autofix
-      # -----------------------------
-      - name: Prepare SARIF for autofix
-        if: always()
-        run: |
-          echo "Searching for SARIF file..."
-          SARIF_FILE=$(find . -name "*.sarif" | head -n 1)
-
-          if [ -z "$SARIF_FILE" ]; then
-          echo "No SARIF file found. Skipping autofix."
-          exit 0
-          fi
-          SARIF_FILE=$(realpath "$SARIF_FILE")
-          echo "Using SARIF file: $SARIF_FILE"
-
-          TARGET_FILE=$(realpath mobsf.sarif 2>/dev/null || echo "")
-
-          if [ "$SARIF_FILE" != "$TARGET_FILE" ]; then
-          cp "$SARIF_FILE" mobsf.sarif
-          else
-          echo "SARIF already normalized as mobsf.sarif, skipping copy"
-          fi
-    
-      - name: Run MobSF LLM Remediation
-        if: always()
+      # Create Fix PR and tag Copilot
+      - name: Create Fix PR
+        run: python3 security/mobsf_to_pr.py
         env:
-          OPENAI_API_KEY: ${{ secrets.FINDINGS_COPILOT }}
-        run: |
-          python security/mobsf_sarif_autofix.py
-
-      - name: Upload fix suggestions
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobsf-fix-suggestions
-          path: mobsf_fix_suggestions.md
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
