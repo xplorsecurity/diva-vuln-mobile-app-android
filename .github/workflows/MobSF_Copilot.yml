@@ -1,36 +1,40 @@
-name: MobSF GitHub-Native Security
+name: MobSF PR Security Scan
 
 on:
-  push:
   pull_request:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
-  security-scan:
+  mobsf-scan:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-      pull-requests: write
-      security-events: write
-
     steps:
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
 
-      # Run MobSF here (example placeholder)
+      # ---- Run MobSF Here ----
+      # Replace this section with your real MobSF command
       - name: Run MobSF
         run: |
-          echo "Run MobSF here"
-          # Assume mobsf.sarif gets generated
+          echo "Running MobSF..."
+          # Ensure mobsf.sarif is generated in repo root
 
-      # Upload SARIF to Code Scanning
-      - name: Upload SARIF
+      # ---- Validate SARIF exists ----
+      - name: Verify SARIF file
+        run: |
+          if [ ! -f mobsf.sarif ]; then
+            echo "SARIF file not found!"
+            exit 1
+          fi
+
+      # ---- Upload SARIF ----
+      - name: Upload SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: mobsf.sarif
-
-      # Create Fix PR and tag Copilot
-      - name: Create Fix PR
-        run: python3 security/mobsf_sarif_autofix.py
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
