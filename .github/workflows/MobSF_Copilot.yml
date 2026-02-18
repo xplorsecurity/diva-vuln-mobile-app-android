@@ -31,6 +31,6 @@ jobs:
 
       # Create Fix PR and tag Copilot
       - name: Create Fix PR
-        run: python3 security/mobsf_to_pr.py
+        run: python3 security/mobsf_sarif_autofix.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
