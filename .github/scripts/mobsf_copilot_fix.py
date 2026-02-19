@@ -9,20 +9,19 @@ COPILOT_API_URL = "https://api.github.com/copilot/chat/completions"
 
 def ask_copilot(finding, file_content):
     headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Content-Type": "application/json",
+        "Authorization": f"token {GITHUB_TOKEN}", # 'token' instead of 'Bearer' for Classic
         "Accept": "application/vnd.github+json"
     }
     
-    prompt = f"Vulnerability: {finding}\n\nFile Content:\n{file_content}\n\nTask: Fix the vulnerability. Return ONLY the full updated code. No backticks, no markdown."
-    
+    # Rest of the payload stays the same
     payload = {
         "model": "gpt-4o",
-        "messages": [{"role": "user", "content": prompt}]
+        "messages": [{"role": "user", "content": f"Fix: {finding}\n\nCode:\n{file_content}"}]
     }
     
     response = requests.post(COPILOT_API_URL, headers=headers, json=payload)
-    response.raise_for_status()
+    if response.status_code == 404:
+        return "ERROR: Copilot API not accessible with this token. Check SSO or Org Policies."
     return response.json()['choices'][0]['message']['content'].strip()
 
 def run():
