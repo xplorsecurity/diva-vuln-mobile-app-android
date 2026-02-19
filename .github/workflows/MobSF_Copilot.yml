@@ -36,4 +36,4 @@ jobs:
         env:
           # You must add this secret to your Repo Settings
           GH_TOKEN: ${{ secrets.GH_COPILOT_TOKEN }} 
-        run: python diva-vuln-mobile-app-android/security/mobsf_sarif_autofix.py
+        run: python .github/scripts/mobsf_copilot_fix.py
