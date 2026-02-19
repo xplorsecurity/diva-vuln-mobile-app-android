@@ -31,7 +31,7 @@ def run():
         return
 
     with open('mobsf_results.json') as f:
-        findings = json.load(f).get('findings', [])
+        findings = json.load(f).get('results', [])
 
     if not findings:
         print("Zero vulnerabilities detected.")
