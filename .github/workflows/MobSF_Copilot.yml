@@ -1,7 +1,7 @@
 name: "MobSF Scan & Copilot Fix"
 
 on:
-  workflow_dispatch: # This enables the manual button in GitHub UI
+  workflow_dispatch: # Manual button in UI
 
 jobs:
   scan-and-fix:
@@ -16,11 +16,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -29,11 +24,18 @@ jobs:
       - name: Run MobSF Scan
         run: |
           pip install mobsfscan
-          # Generating the findings file
-          mobsfscan . --json --output mobsf_results.json || true
+          # IMPORTANT: We scan the current dir '.' and force JSON output
+          # If your code is in a subfolder, change '.' to './app' or similar
+          mobsfscan . --json -o mobsf_results.json || true
+          
+      - name: Debug Output (See what MobSF found)
+        run: |
+          echo "Checking MobSF JSON size..."
+          ls -lh mobsf_results.json
+          # This will show the first 20 lines of the results in the log
+          head -n 20 mobsf_results.json
 
       - name: Run Copilot Agent
         env:
-          # You must add this secret to your Repo Settings
           GH_TOKEN: ${{ secrets.GH_COPILOT_TOKEN }} 
         run: python .github/scripts/mobsf_copilot_fix.py
