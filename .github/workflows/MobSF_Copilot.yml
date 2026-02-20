@@ -1,10 +1,10 @@
-name: "MobSF Scan & Copilot Fix"
+name: "MobSF AI Remediator"
 
 on:
-  workflow_dispatch: # Manual button in UI
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
-  scan-and-fix:
+  scan-and-suggest:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,6 +16,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -24,18 +29,11 @@ jobs:
       - name: Run MobSF Scan
         run: |
           pip install mobsfscan
-          # IMPORTANT: We scan the current dir '.' and force JSON output
-          # If your code is in a subfolder, change '.' to './app' or similar
+          # Scan root directory and output to JSON
           mobsfscan . --json -o mobsf_results.json || true
           
-      - name: Debug Output (See what MobSF found)
-        run: |
-          echo "Checking MobSF JSON size..."
-          ls -lh mobsf_results.json
-          # This will show the first 20 lines of the results in the log
-          head -n 20 mobsf_results.json
-
-      - name: Run Copilot Agent
+      - name: Run AI Remediation Agent
         env:
-          GH_TOKEN: ${{ secrets.GH_COPILOT_TOKEN }} 
+          # Use your Classic Token or Fine-grained token here
+          GH_TOKEN: ${{ secrets.GH_COPILOT_TOKEN }}
         run: python .github/scripts/mobsf_copilot_fix.py
