@@ -8,29 +8,50 @@ GITHUB_TOKEN = os.getenv("GH_TOKEN")
 COPILOT_API_URL = "https://api.github.com/copilot/chat/completions"
 
 def ask_copilot(finding_desc, file_content):
-    """Calls GitHub Copilot to fix the code."""
+    """Calls the 2026 GitHub Copilot API with correct endpoint routing."""
+    
+    # Try the Enterprise/Org specific endpoint first, then fallback to standard
+    endpoints = [
+        "https://api.githubcopilot.com/chat/completions",
+        "https://api.github.com/copilot/chat/completions"
+    ]
+    
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}", # Works for both Classic and Fine-grained
+        "Authorization": f"token {GITHUB_TOKEN}", # Or "Bearer {GITHUB_TOKEN}" if using Fine-grained
+        "Editor-Version": "vscode/1.95.0",        # Required by some Copilot API versions
         "Content-Type": "application/json",
         "Accept": "application/vnd.github+json"
     }
     
-    prompt = (
-        f"You are a Mobile Security Expert. Fix this vulnerability: {finding_desc}\n"
-        f"Here is the file content:\n\n{file_content}\n\n"
-        "Instructions: Return ONLY the full corrected source code. No explanations, no markdown backticks."
-    )
-    
     payload = {
-        "model": "gpt-4o",
-        "messages": [{"role": "user", "content": prompt}],
+        "model": "gpt-4o", # 2026 default. Can also be 'claude-3.5-sonnet'
+        "messages": [
+            {
+                "role": "system", 
+                "content": "You are a mobile security expert. Provide ONLY code fixes."
+            },
+            {
+                "role": "user", 
+                "content": f"Fix this MobSF finding: {finding_desc}\n\nCode:\n{file_content}"
+            }
+        ],
         "temperature": 0.1
     }
-    
-    response = requests.post(COPILOT_API_URL, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()['choices'][0]['message']['content'].strip()
 
+    last_error = ""
+    for url in endpoints:
+        try:
+            print(f"Trying Copilot API at: {url}")
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                return response.json()['choices'][0]['message']['content'].strip()
+            else:
+                last_error = f"{response.status_code}: {response.text}"
+        except Exception as e:
+            last_error = str(e)
+            
+    raise Exception(f"All Copilot API endpoints failed. Last error: {last_error}")
+    
 def run_agent():
     if not os.path.exists('mobsf_results.json'):
         print("❌ Error: mobsf_results.json missing.")
