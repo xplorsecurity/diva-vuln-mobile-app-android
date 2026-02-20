@@ -8,27 +8,22 @@ GITHUB_TOKEN = os.getenv("GH_TOKEN")
 COPILOT_API_URL = "https://api.github.com/copilot/chat/completions"
 
 def ask_copilot(finding_desc, file_content):
-    """Calls the 2026 GitHub Copilot API with correct endpoint routing."""
+    """Uses the GitHub Models API (2026 official path for AI automation)."""
     
-    # Try the Enterprise/Org specific endpoint first, then fallback to standard
-    endpoints = [
-        "https://api.githubcopilot.com/chat/completions",
-        "https://api.github.com/copilot/chat/completions"
-    ]
+    # This is the correct endpoint for programmatic AI completions in 2026
+    url = "https://models.inference.ai.azure.com/chat/completions"
     
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}", # Or "Bearer {GITHUB_TOKEN}" if using Fine-grained
-        "Editor-Version": "vscode/1.95.0",        # Required by some Copilot API versions
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Content-Type": "application/json",
-        "Accept": "application/vnd.github+json"
     }
     
     payload = {
-        "model": "gpt-4o", # 2026 default. Can also be 'claude-3.5-sonnet'
+        "model": "gpt-4o", 
         "messages": [
             {
                 "role": "system", 
-                "content": "You are a mobile security expert. Provide ONLY code fixes."
+                "content": "You are a mobile security expert. Return ONLY the fixed source code."
             },
             {
                 "role": "user", 
@@ -38,20 +33,16 @@ def ask_copilot(finding_desc, file_content):
         "temperature": 0.1
     }
 
-    last_error = ""
-    for url in endpoints:
-        try:
-            print(f"Trying Copilot API at: {url}")
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content'].strip()
-            else:
-                last_error = f"{response.status_code}: {response.text}"
-        except Exception as e:
-            last_error = str(e)
-            
-    raise Exception(f"All Copilot API endpoints failed. Last error: {last_error}")
+    print(f"Calling GitHub Models API for remediation...")
+    response = requests.post(url, headers=headers, json=payload)
     
+    if response.status_code == 200:
+        return response.json()['choices'][0]['message']['content'].strip()
+    elif response.status_code == 403:
+        raise Exception("403 Forbidden: Ensure your GitHub Token has 'GitHub Models' access enabled in settings.")
+    else:
+        raise Exception(f"API Error {response.status_code}: {response.text}")
+        
 def run_agent():
     if not os.path.exists('mobsf_results.json'):
         print("❌ Error: mobsf_results.json missing.")
