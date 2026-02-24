@@ -67,7 +67,7 @@ public class SQLInjectionActivity extends AppCompatActivity {
         EditText srchtxt = (EditText) findViewById(R.id.ivi1search);
         Cursor cr = null;
         try {
-            cr = mDB.rawQuery("SELECT * FROM sqliuser WHERE user = '" + srchtxt.getText().toString() + "'", null);
+            cr = mDB.rawQuery("SELECT * FROM sqliuser WHERE user = ?", new String[]{srchtxt.getText().toString()});
             StringBuilder strb = new StringBuilder("");
             if ((cr != null) && (cr.getCount() > 0)) {
                 cr.moveToFirst();
