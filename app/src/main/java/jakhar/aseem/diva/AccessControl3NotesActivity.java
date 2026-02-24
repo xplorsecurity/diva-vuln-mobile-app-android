@@ -69,8 +69,10 @@ public class AccessControl3NotesActivity extends AppCompatActivity {
             int [] fields = {R.id.title_entry, R.id.note_entry};
             SimpleCursorAdapter adapter = new SimpleCursorAdapter(this, R.layout.notes_entry ,cr, columns, fields, 0);
             lview.setAdapter(adapter);
-            pinTxt.setVisibility(View.INVISIBLE);
-            abutton.setVisibility(View.INVISIBLE);
+            // FIX: Clear sensitive PIN data before hiding to prevent memory/accessibility leakage
+            pinTxt.setText("");                    // Clear the PIN from memory/UI
+            pinTxt.setVisibility(View.GONE);       // GONE removes the view from layout entirely
+            abutton.setVisibility(View.GONE);      // GONE removes the view from layout entirely
             //cr.close();
 
         }
