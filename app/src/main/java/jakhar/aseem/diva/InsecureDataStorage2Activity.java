@@ -33,6 +33,7 @@ package jakhar.aseem.diva;
 
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -64,7 +65,11 @@ public class InsecureDataStorage2Activity extends AppCompatActivity {
         EditText usr = (EditText) findViewById(R.id.ids2Usr);
         EditText pwd = (EditText) findViewById(R.id.ids2Pwd);
         try {
-            mDB.execSQL("INSERT INTO myuser VALUES ('"+ usr.getText().toString() +"', '"+ pwd.getText().toString() +"');");
+            SQLiteStatement stmt = mDB.compileStatement("INSERT INTO myuser VALUES (?, ?)");
+            stmt.bindString(1, usr.getText().toString());
+            stmt.bindString(2, pwd.getText().toString());
+            stmt.executeInsert();
+            stmt.close();
             mDB.close();
         }
         catch(Exception e) {
